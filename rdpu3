@@ -1,0 +1,36 @@
+name: Cl
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Download Ngrok
+      run: Invoke-WebRequest https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-windows-amd64.zip -OutFile ngrok.zip
+    - name: Extract Ngrok
+      run: Expand-Archive ngrok.zip
+    - name: Authenticate Ngrok
+      run: .\ngrok\ngrok.exe authtoken $Env:NGROK_AUTH_TOKEN
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+    - name: Enable Remote Desktop
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+        Set-LocalUser -Name "runneradmin" -Password (ConvertTo-SecureString -AsPlainText "P@ssw0rd!" -Force)
+    - name: Create Ngrok Config
+      run: |
+        echo "version: 2" > ngrok.yml
+        echo "authtoken: $Env:NGROK_AUTH_TOKEN" >> ngrok.yml
+        echo "tunnels:" >> ngrok.yml
+        echo "  rdp:" >> ngrok.yml
+        echo "    proto: tcp" >> ngrok.yml
+        echo "    addr: 3389" >> ngrok.yml
+        echo "    remote_addr: 1.tcp.us-cal-1.ngrok.io:24595" >> ngrok.yml
+      env:
+        NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+    - name: Create Tunnel
+      run: .\ngrok\ngrok.exe start --config ngrok.yml --all
